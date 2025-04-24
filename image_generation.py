@@ -64,9 +64,9 @@ that:
 
 ## Output Instructions:
 - Output only the final image prompt. Do not output quotation marks.
-- Do not repeat or rephrase the LinkedIn post.
-- Do not add any explanations or extra content just the image prompt.
-- Never leave things blank like "Header area reserved for customizable callout text"
+- Do NOT repeat or rephrase the LinkedIn post.
+- Do NOY add any explanations or extra content just the image prompt.
+- NEVER leave things blank like "Header area reserved for customizable callout text"
 - Output numeric stats when available in the original post
 ## Style Guidelines:
 - Think like a brand designer or marketing creative.
@@ -86,8 +86,7 @@ Give LinkedIn post:
 
 Please divide this post into exactly {num_parts} conceptual parts (you may use numbering or your own logic),
 and for each part output a single, concise image-generation prompt enclosed between
-/prompt start/ and /prompt end/ using the above mentioned rules for each prompt.
-Do not change any of the original instructions—apply them to every part.
+/prompt start/ and /prompt end/. IMPORTANT: using the above mentioned Output Instructions and Style Guidelines for EACH prompt.
 """
 
     model = genai.GenerativeModel(model_name)
