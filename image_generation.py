@@ -24,6 +24,12 @@ genai.configure(api_key=GENAI_API_KEY)
 # Directory paths
 REF_DIR = 'reference_images'
 OUT_DIR = 'outputs'
+
+# Clear reference images on each run
+if os.path.exists(REF_DIR):
+    for f in os.listdir(REF_DIR):
+        os.remove(os.path.join(REF_DIR, f))
+
 os.makedirs(REF_DIR, exist_ok=True)
 os.makedirs(OUT_DIR, exist_ok=True)
 
