@@ -13,8 +13,9 @@ load_dotenv()
 # API keys should be set as environment variables for security
 # OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 # GENAI_API_KEY = os.getenv('GENAI_API_KEY')
-OPENAI_API_KEY = st.secrets('OPENAI_API_KEY')
-GENAI_API_KEY =st.secrets('GENAI_API_KEY')
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+GENAI_API_KEY = st.secrets["GENAI_API_KEY"]
+
 
 # Initialize clients
 oai_client = OpenAI(api_key=OPENAI_API_KEY)
