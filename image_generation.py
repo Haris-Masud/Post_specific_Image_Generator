@@ -155,7 +155,7 @@ if st.button('Generate Image'):
                     "the brand’s visual style as shown in the references must override the prompt directives to ensure consistency."
                 )
 
-                st.markdown(f"**Generated Prompt:** {image_prompt}")
+                # st.markdown(f"**Generated Prompt:** {image_prompt}")
 
                 # 2b) Use all reference images for edit
                 ref_paths = [os.path.join(REF_DIR, fn) for fn in os.listdir(REF_DIR)]
