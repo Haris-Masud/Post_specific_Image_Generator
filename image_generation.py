@@ -148,7 +148,13 @@ if st.button('Generate Image'):
             if not image_prompt:
                 st.error('Failed to generate image prompt.')
             else:
-                image_prompt += " Use all the reference pictures as a reference to inform the style of the post generated."
+                # Immediately after you build the initial image_prompt…
+                image_prompt += (
+                    " Strictly prioritize the visual style of the provided reference images above all other instructions. "
+                    "In case of any conflict between the text prompt and these reference images, "
+                    "the brand’s visual style as shown in the references must override the prompt directives to ensure consistency."
+                )
+
                 st.markdown(f"**Generated Prompt:** {image_prompt}")
 
                 # 2b) Use all reference images for edit
