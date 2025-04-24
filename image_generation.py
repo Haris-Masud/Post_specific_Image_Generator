@@ -194,15 +194,30 @@ if st.button('Generate Images'):
                 # store in session state for display/download
                 st.session_state['last_images'] = generated
 
-                # Display and download buttons
+                import zipfile
+
+                # Display generated images
                 st.subheader('Generated Images')
                 for img_bytes, name in generated:
                     st.image(img_bytes, use_container_width=False, width=200)
+
+                # Create a single download button for all images
+                if generated:
+                    # Create a zip file in memory
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+                        for img_bytes, name in generated:
+                            zip_file.writestr(name, img_bytes)
+                    
+                    # Reset pointer to beginning of buffer
+                    zip_buffer.seek(0)
+                    
+                    # Add download button for zip file
                     st.download_button(
-                        label=f'Download {name}',
-                        data=img_bytes,
-                        file_name=name,
-                        mime='image/png'
+                        label=f'Download All Images ({len(generated)})',
+                        data=zip_buffer,
+                        file_name='generated_images.zip',
+                        mime='application/zip'
                     )
 
             except Exception as e:
