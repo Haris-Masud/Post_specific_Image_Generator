@@ -36,6 +36,10 @@ if 'selected_image' not in st.session_state:
 if 'last_generated_image' not in st.session_state:
    st.session_state['last_generated_image'] = None
 
+
+if 'processed_uploads' not in st.session_state:
+    st.session_state['processed_uploads'] = set()
+
 # ------ Gemini Prompt Generator ------
 def generate_text_prompt(post_text: str, model_name: str = 'gemini-2.0-flash') -> str:
     """
@@ -61,7 +65,7 @@ that:
 - Output only the final image prompt. Do not output quotation marks.
 - Do not repeat or rephrase the LinkedIn post.
 - Do not add any explanations or extra content just the image prompt.
-- Never leave things blank like "Header area reserved for customizable callout text"
+- NEVER leave things blank or any placeholders like "Header area reserved for customizable callout text"
 - Output numeric stats when available in the original post
 ## Style Guidelines:
 - Think like a brand designer or marketing creative.
@@ -101,17 +105,32 @@ with tabs[0]:
 
     # Reference Image Management
     st.subheader('1. Upload or Manage Reference Images')
+    # uploaded_files = st.file_uploader(
+    #     'Upload reference images (JPEG/PNG)',
+    #     type=['jpg', 'jpeg', 'png'],
+    #     accept_multiple_files=True
+    # )
+    # if uploaded_files:
+    #     for up in uploaded_files:
+    #         path = os.path.join(REF_DIR, up.name)
+    #         if not os.path.exists(path):
+    #             with open(path, 'wb') as f:
+    #                 f.write(up.getbuffer())
+    #             st.success(f"Saved {up.name}")
+
     uploaded_files = st.file_uploader(
         'Upload reference images (JPEG/PNG)',
-        type=['jpg', 'jpeg', 'png'],
-        accept_multiple_files=True
+        type=['jpg','jpeg','png'],
+        accept_multiple_files=True,
+        key='ref_uploader'
     )
     if uploaded_files:
         for up in uploaded_files:
-            path = os.path.join(REF_DIR, up.name)
-            if not os.path.exists(path):
-                with open(path, 'wb') as f:
+            if up.name not in st.session_state['processed_uploads']:
+                path = os.path.join(REF_DIR, up.name)
+                with open(path,'wb') as f:
                     f.write(up.getbuffer())
+                st.session_state['processed_uploads'].add(up.name)
                 st.success(f"Saved {up.name}")
 
     refs = os.listdir(REF_DIR)
