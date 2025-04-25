@@ -1,20 +1,21 @@
+
 import os
 import io
 import base64
+import time
 import streamlit as st
 from PIL import Image
 from openai import OpenAI
 import google.generativeai as genai
 from dotenv import load_dotenv
-import json  # CHANGED: for parsing Gemini’s multi-prompt output
-import re    # CHANGED: for splitting prompts by delimiters
 
+# Load environment variables
 load_dotenv()
-# ------ Configuration ------
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-GENAI_API_KEY = st.secrets["GENAI_API_KEY"]
 
-# Initialize clients
+# ------ Configuration ------
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+GENAI_API_KEY = os.getenv('GENAI_API_KEY')
+
 oai_client = OpenAI(api_key=OPENAI_API_KEY)
 genai.configure(api_key=GENAI_API_KEY)
 
@@ -22,34 +23,28 @@ genai.configure(api_key=GENAI_API_KEY)
 REF_DIR = 'reference_images'
 OUT_DIR = 'outputs'
 
-# Clear reference images on each run
-if os.path.exists(REF_DIR):
-    for f in os.listdir(REF_DIR):
-        os.remove(os.path.join(REF_DIR, f))
-
+# Ensure directories exist
 os.makedirs(REF_DIR, exist_ok=True)
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# ------ Gemini Helper Functions ------
-def setup_gemini():
+# Initialize session state
+if 'generated_images' not in st.session_state:
+    st.session_state['generated_images'] = []
+if 'selected_image' not in st.session_state:
+    st.session_state['selected_image'] = None
+
+if 'last_generated_image' not in st.session_state:
+   st.session_state['last_generated_image'] = None
+
+# ------ Gemini Prompt Generator ------
+def generate_text_prompt(post_text: str, model_name: str = 'gemini-2.0-flash') -> str:
+    """
+    Generate an image generation prompt based on the user post via Gemini.
+    """
     try:
-        genai.configure(api_key=GENAI_API_KEY)
-        return True
-    except Exception as e:
-        st.error(f"Error configuring Gemini: {e}")
-        return False
-
-# CHANGED: new function to request N prompts from Gemini
-def generate_text_prompts(post_text: str, num_parts: int, model_name: str = 'gemini-2.0-flash') -> list[str]:
-    """
-    Ask Gemini to divide the LinkedIn post into `num_parts` and return a list of image prompts,
-    each wrapped in /prompt start/ and /prompt end/.
-    """
-    if not setup_gemini():
-        return []
-
-    system_instructions = """
-# Overview
+        model = genai.GenerativeModel(model_name)
+        system_prompt = (
+            """# Overview
 You are an AI agent that transforms LinkedIn posts into visual prompt descriptions for generating graphic marketing materials.
  These visuals are designed to be paired with the post on LinkedIn, helping communicate the message in a visually engaging, brand-aligned way.
 ## Objective:
@@ -64,9 +59,9 @@ that:
 
 ## Output Instructions:
 - Output only the final image prompt. Do not output quotation marks.
-- Do NOT repeat or rephrase the LinkedIn post.
-- Do NOY add any explanations or extra content just the image prompt.
-- NEVER leave things blank like "Header area reserved for customizable callout text"
+- Do not repeat or rephrase the LinkedIn post.
+- Do not add any explanations or extra content just the image prompt.
+- Never leave things blank like "Header area reserved for customizable callout text"
 - Output numeric stats when available in the original post
 ## Style Guidelines:
 - Think like a brand designer or marketing creative.
@@ -76,152 +71,216 @@ You can mention layout suggestions (e.g., "split screen design," "header with bo
 Assume the output will be generated using AI image tools - your prompt should guide those tools effectively.
 ## Example Prompt Format:
 A modern flat-style graphic showing a human brain connected to mechanical gears, representing the fusion of AI and automation. 
-Minimalist background, soft gradients, clean sans-serif text placement space at the top 
-
-"""
-
-    user_instructions = f"""
-Give LinkedIn post:
-\"\"\"{post_text}\"\"\"
-
-Please divide this post into exactly {num_parts} conceptual parts (you may use numbering or your own logic),
-and for each part output a single, concise image-generation prompt enclosed between
-/prompt start/ and /prompt end/. IMPORTANT: using the above mentioned Output Instructions and Style Guidelines for EACH prompt.
-"""
-
-    model = genai.GenerativeModel(model_name)
-    try:
-        response = model.generate_content(system_instructions + user_instructions)
-        text = response.text or ""
-        # CHANGED: split out each prompt
-        raw_parts = re.split(r"/prompt start/|/prompt end/", text)
-        # filter out empty strings and strip whitespace
-        prompts = [p.strip() for p in raw_parts if p.strip() and not p.strip().startswith('#')]
-        # ensure we got exactly num_parts
-        if len(prompts) != num_parts:
-            st.warning(f"Expected {num_parts} prompts, but got {len(prompts)}. Proceeding with what we have.")
-        return prompts
+Minimalist background, soft gradients, clean sans-serif text placement space at the top"""
+        )
+        user_prompt = (
+            f"Read the following LinkedIn post and generate a professional, brand-aligned image prompt:\n'{post_text}'"
+        )
+        response = model.generate_content(system_prompt + "\n" + user_prompt)
+        text = response.text.strip() if response.text else ''
+        # enforce brand style priority
+        enforcement = (
+            " Strictly prioritize the visual style of the provided reference images above all other instructions. "
+            "In case of any conflict between the text prompt and these reference images, "
+            "the brand’s visual style as shown in the references must override the prompt directives to ensure consistency."
+        )
+        return text + enforcement
     except Exception as e:
-        st.error(f"Gemini generation failed: {e}")
-        return []
+        st.error(f"Gemini prompt generation failed: {e}")
+        return ''
 
 # ------ Streamlit App ------
 st.set_page_config(page_title='Brand-Based Visual Generator', layout='wide')
 st.title('🔮 Brand-Based Visual Generator')
 
-# ==== 1) Reference Image Management ====
-st.header('1. Upload or Manage Reference Images')
-uploaded_files = st.file_uploader(
-    'Upload reference images (JPEG/PNG)',
-    type=['jpg', 'jpeg', 'png'],
-    accept_multiple_files=True
-)
-if uploaded_files:
-    for up in uploaded_files:
-        path = os.path.join(REF_DIR, up.name)
-        if not os.path.exists(path):
-            with open(path, 'wb') as f:
-                f.write(up.getbuffer())
-            st.success(f"Saved {up.name}")
+tabs = st.tabs(["Create Image", "Edit Image"])
 
-st.subheader('Saved Reference Images')
-refs = os.listdir(REF_DIR)
-cols = st.columns(4)
-for idx, fname in enumerate(refs):
-    img_path = os.path.join(REF_DIR, fname)
-    with cols[idx % 4]:
-        st.image(img_path, width=100, caption=fname)
-        if st.button(f'Delete {fname}', key=f'del_{fname}'):
-            os.remove(img_path)
-            st.experimental_rerun()
+# ---- Tab 1: Create Image ----
+with tabs[0]:
+    st.header('Create Image')
 
-# ==== 2) Post Input & Image Generation ====
-st.header('2. Generate Images for Your Post')
-post_text = st.text_area('Enter your post text here', height=150)
+    # Reference Image Management
+    st.subheader('1. Upload or Manage Reference Images')
+    uploaded_files = st.file_uploader(
+        'Upload reference images (JPEG/PNG)',
+        type=['jpg', 'jpeg', 'png'],
+        accept_multiple_files=True
+    )
+    if uploaded_files:
+        for up in uploaded_files:
+            path = os.path.join(REF_DIR, up.name)
+            if not os.path.exists(path):
+                with open(path, 'wb') as f:
+                    f.write(up.getbuffer())
+                st.success(f"Saved {up.name}")
 
-# CHANGED: slider to choose number of images (1–10)
-num_images = st.slider('How many images to generate?', 1, 10, 1)
-
-# Display previously generated images
-if 'last_images' in st.session_state:
-    st.subheader('Previously Generated Images')
-    for img_bytes, name in st.session_state['last_images']:
-        st.image(img_bytes, width=200, caption=name)
-
-if st.button('Generate Images'):
-    if not post_text:
-        st.error('Please enter some post text.')
+    refs = os.listdir(REF_DIR)
+    st.subheader('Saved Reference Images')
+    if refs:
+        cols = st.columns(4)
+        for idx, fname in enumerate(refs):
+            img_path = os.path.join(REF_DIR, fname)
+            with cols[idx % 4]:
+                st.image(img_path, width=100, caption=fname)
+                if st.button(f'Delete {fname}', key=f'del_{fname}'):
+                    os.remove(img_path)
+                    st.rerun()
     else:
-        # 2a) Create N prompts via Gemini
-        with st.spinner('Requesting image prompts from Gemini...'):
-            prompts = generate_text_prompts(post_text, num_images)
+        st.info('No reference images uploaded yet.')
 
-        if not prompts:
-            st.error('Failed to generate image prompts.')
+    # Image Generation Inputs
+    st.subheader('2. Create New Image')
+    post_text = st.text_area('User Post', height=150)
+    custom_instr = st.text_area('Custom Instructions', height=100)
+
+
+    # ------ PERSISTENCE: display previously generated image if it exists ------
+    if st.session_state['last_generated_image'] is not None:
+        st.subheader('Generated Image (Last Run)')
+        st.image(st.session_state['last_generated_image'], use_container_width=True)
+
+    if st.button('Generate Image'):
+        if not post_text:
+            st.error('Please enter a user post.')
         else:
-            # CHANGED: enforcement suffix to append to **each** prompt
-            enforcement = (
-                " Strictly prioritize the visual style of the provided reference images above all other instructions. "
-                "In case of any conflict between the text prompt and these reference images, "
-                "the brand’s visual style as shown in the references must override the prompt directives to ensure consistency."
-            )
+            # 2a) Generate prompt via Gemini
+            with st.spinner('Generating prompt via Gemini...'):
+                image_prompt = generate_text_prompt(post_text)
+                # append custom instructions priority clause
+                image_prompt += f" IMPORTANT: following user instructions have a priority over everything else. user instructions: {custom_instr}"
 
-            # Prepare reference files once
-            ref_paths = [os.path.join(REF_DIR, fn) for fn in os.listdir(REF_DIR)]
-            files = [open(p, 'rb') for p in ref_paths]
+            st.markdown('**Final Image Prompt:**')
+            st.code(image_prompt, language='text')
 
-            generated = []  # to store (bytes, filename)
+            # 2b) Call OpenAI Image Generation
+            ref_paths = [open(os.path.join(REF_DIR, f), 'rb') for f in refs]
             try:
-                for idx, base_prompt in enumerate(prompts, start=1):
-                    full_prompt = base_prompt + enforcement
-
-                    with st.spinner(f'Generating image {idx}/{len(prompts)}...'):
-                        result = oai_client.images.edit(
-                            model='gpt-image-1',
-                            image=files,
-                            prompt=full_prompt
-                        )
-
-                    b64 = result.data[0].b64_json
-                    img_bytes = base64.b64decode(b64)
-                    name = f"generated_{idx}.png"
-                    path = os.path.join(OUT_DIR, name)
-                    with open(path, 'wb') as out:
-                        out.write(img_bytes)
-
-                    generated.append((img_bytes, name))
-
-                # store in session state for display/download
-                st.session_state['last_images'] = generated
-
-                import zipfile
-
-                # Display generated images
-                st.subheader('Generated Images')
-                for img_bytes, name in generated:
-                    st.image(img_bytes, use_container_width=False, width=200)
-
-                # Create a single download button for all images
-                if generated:
-                    # Create a zip file in memory
-                    zip_buffer = io.BytesIO()
-                    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-                        for img_bytes, name in generated:
-                            zip_file.writestr(name, img_bytes)
-                    
-                    # Reset pointer to beginning of buffer
-                    zip_buffer.seek(0)
-                    
-                    # Add download button for zip file
-                    st.download_button(
-                        label=f'Download All Images ({len(generated)})',
-                        data=zip_buffer,
-                        file_name='generated_images.zip',
-                        mime='application/zip'
+                with st.spinner('Generating image from OpenAI...'):
+                    result = oai_client.images.edit(
+                        model='gpt-image-1',
+                        prompt=image_prompt,
+                        image=ref_paths
                     )
+                b64 = result.data[0].b64_json
+                img_bytes = base64.b64decode(b64)
+                timestamp = int(time.time())
+                name = f"generated_{timestamp}.png"
+                out_path = os.path.join(OUT_DIR, name)
+                with open(out_path, 'wb') as f:
+                    f.write(img_bytes)
+
+
+
+                # ------ PERSISTENCE: save into session state so it survives reruns ------
+                st.session_state['last_generated_image'] = img_bytes
+                # update session state
+                st.session_state['generated_images'].append(name)
+                st.session_state['selected_image'] = name
+
+                # display
+                st.subheader('Generated Image')
+                st.image(img_bytes, use_container_width=True)
+
+
+                out_name = f"generated_{len(os.listdir(OUT_DIR))+1}.png"
+                    
+                st.download_button(
+                    label='Download Generated Image',
+                    data=img_bytes,
+                    file_name=out_name,
+                    mime='image/png'
+                )
+                st.success(f'Saved to {out_path}')
 
             except Exception as e:
                 st.error(f"Image generation failed: {e}")
             finally:
-                for f in files:
+                for f in ref_paths:
                     f.close()
+
+# ---- Tab 2: Edit Image ----
+with tabs[1]:
+    st.header('Edit Image')
+
+     # ---- NEW: Upload any image to edit (in addition to generated ones) ----
+    uploaded_edit = st.file_uploader(
+        'Or upload your own image to edit (JPEG/PNG)',
+        type=['jpg', 'jpeg', 'png'],
+        help='This image will be added to the list below for editing.'
+    )
+    if uploaded_edit:
+        edit_name = uploaded_edit.name
+        edit_path = os.path.join(OUT_DIR, edit_name)
+        # Save the upload if not already present
+        if not os.path.exists(edit_path):
+            with open(edit_path, 'wb') as f:
+                f.write(uploaded_edit.getbuffer())
+            st.success(f"Saved upload: {edit_name}")
+            
+        # Ensure it appears in our session-managed list (no rerun)
+        if edit_name not in st.session_state['generated_images']:
+            st.session_state['generated_images'].append(edit_name)
+            st.session_state['selected_image'] = edit_name
+
+    generated = st.session_state['generated_images']
+    if generated:
+        selection = st.selectbox(
+            'Select an image to edit', generated,
+            index=(generated.index(st.session_state['selected_image']) if st.session_state['selected_image'] in generated else 0)
+        )
+        st.session_state['selected_image'] = selection
+        sel_path = os.path.join(OUT_DIR, selection)
+
+        st.subheader('Selected Image')
+        img = Image.open(sel_path)
+        st.image(img, use_container_width=True)
+
+        edit_instr = st.text_area('Edit Instructions', height=100)
+        if st.button('Edit Image'):
+            if not edit_instr:
+                st.error('Please enter edit instructions.')
+            else:
+                try:
+                    with st.spinner('Editing image...'):
+                        with open(sel_path, 'rb') as img_file:
+                            result = oai_client.images.edit(
+                                model='gpt-image-1',
+                                image=img_file,
+                                prompt=edit_instr
+                            )
+                    b64 = result.data[0].b64_json
+                    img_bytes = base64.b64decode(b64)
+                    timestamp = int(time.time())
+                    name = f"edited_{timestamp}.png"
+                    out_path = os.path.join(OUT_DIR, name)
+                    with open(out_path, 'wb') as f:
+                        f.write(img_bytes)
+
+                    st.session_state['generated_images'].append(name)
+                    st.session_state['selected_image'] = name
+
+                    st.subheader('Edited Image')
+                    st.image(img_bytes, use_container_width=True)
+                    out_name = f"generated_{len(os.listdir(OUT_DIR))+1}.png"
+
+                    st.download_button(
+                        label='Download Generated Image',
+                        data=img_bytes,
+                        file_name=out_name,
+                        mime='image/png'
+                    )
+
+
+                    st.success(f'Saved edited image to {out_path}')
+                except Exception as e:
+                    st.error(f"Image edit failed: {e}")
+
+        st.subheader('All Generated Images')
+        cols = st.columns(min(4, len(generated)))
+        for idx, fname in enumerate(generated):
+            path = os.path.join(OUT_DIR, fname)
+            with cols[idx % len(cols)]:
+                st.image(path, width=100, caption=fname)
+                if st.button(f'Select {fname}', key=f'sel_{fname}'):
+                    st.session_state['selected_image'] = fname
+                    st.rerun()
