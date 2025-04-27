@@ -22,7 +22,7 @@ load_dotenv()
 # GENAI_API_KEY  = os.getenv("GENAI_API_KEY")
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 GENAI_API_KEY = st.secrets["GENAI_API_KEY"]
-MONGO_URI = st.secrets["MONGO_URI"]
+MONGODB_URI = st.secrets["MONGO_URI"]
 
 
 # Directory paths (near where you create OUT_DIR)
