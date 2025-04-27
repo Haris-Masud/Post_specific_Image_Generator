@@ -17,9 +17,12 @@ st.set_page_config(page_title="Brand Based Social Media Image Generator", layout
 
 # ─── Load environment ─────────────────────────────────────────────────────────
 load_dotenv()
-MONGO_URI      = os.getenv("MONGODB_URI")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GENAI_API_KEY  = os.getenv("GENAI_API_KEY")
+# MONGO_URI      = os.getenv("MONGODB_URI")
+# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# GENAI_API_KEY  = os.getenv("GENAI_API_KEY")
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+GENAI_API_KEY = st.secrets["GENAI_API_KEY"]
+MONGO_URI = st.secrets["MONGO_URI"]
 
 
 # Directory paths (near where you create OUT_DIR)
