@@ -13,7 +13,7 @@ import gridfs
 import hashlib
 
 
-st.set_page_config(page_title="Brand-Based Image Generator", layout="wide")
+st.set_page_config(page_title="Brand Based Social Media Image Generator", layout="wide")
 
 # ─── Load environment ─────────────────────────────────────────────────────────
 load_dotenv()
@@ -192,7 +192,7 @@ Minimalist background, soft gradients, clean sans-serif text placement space at 
 
 # ─── Main App ─────────────────────────────────────────────────────────────────
 
-st.title("🔮 Brand-Based Visual Generator")
+st.title("🔮 Brand Based Social Media Image Generator")
 
 if not st.session_state.current_chat:
     st.warning("Please create or select a project in the sidebar first.")
