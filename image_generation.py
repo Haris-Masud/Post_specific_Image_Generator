@@ -11,18 +11,16 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 import gridfs
 import hashlib
+import uuid
 
 
 st.set_page_config(page_title="Brand Based Social Media Image Generator", layout="wide")
 
 # ─── Load environment ─────────────────────────────────────────────────────────
 load_dotenv()
-# MONGO_URI      = os.getenv("MONGODB_URI")
-# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-# GENAI_API_KEY  = os.getenv("GENAI_API_KEY")
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-GENAI_API_KEY = st.secrets["GENAI_API_KEY"]
-MONGO_URI = st.secrets["MONGODB_URI"]
+MONGO_URI      = os.getenv("MONGODB_URI")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GENAI_API_KEY  = os.getenv("GENAI_API_KEY")
 
 
 # Directory paths (near where you create OUT_DIR)
@@ -68,6 +66,16 @@ if "processed_upload_hashes" not in st.session_state:
 
 if "last_generated" not in st.session_state:
     st.session_state.last_generated = None
+
+
+
+if "last_chat" not in st.session_state:
+    st.session_state.last_chat = None
+
+if "uploader_key" not in st.session_state:
+    # start with a random key
+    st.session_state.uploader_key = f"uploader_{uuid.uuid4()}"
+
 
 # ─── Sidebar: Chat (Project) Management ───────────────────────────────────────
 with st.sidebar:
@@ -132,6 +140,12 @@ with st.sidebar:
             st.session_state.current_chat = None
             st.session_state.deleting_chat = False
             st.rerun()
+
+
+    if st.session_state.current_chat != st.session_state.last_chat:
+        # project changed → reset uploader
+        st.session_state.uploader_key = f"uploader_{uuid.uuid4()}"
+        st.session_state.last_chat = st.session_state.current_chat
 
 # ─── Helpers to fetch images from GridFS ───────────────────────────────────────
 def list_ref_images(chat_name):
@@ -217,7 +231,7 @@ with tabs[0]:
     #                    filename=up.name,
     #                    metadata={"chat": st.session_state.current_chat})
     #     st.success(f"Stored {len(uploaded)} images for '{st.session_state.current_chat}'")
-    uploaded = st.file_uploader("Select JPG/PNG", type=["jpg","jpeg","png"], accept_multiple_files=True)
+    uploaded = st.file_uploader("Select JPG/PNG", type=["jpg","jpeg","png"], accept_multiple_files=True, key=st.session_state.uploader_key)
     if uploaded:
         new_count = 0
         for up in uploaded:
@@ -338,7 +352,7 @@ with tabs[1]:
     st.header(f"Edit Image — {st.session_state.current_chat}")
 
     # allow uploading an external image to edit
-    up = st.file_uploader("Or upload an image to edit", type=["jpg","jpeg","png"])
+    up = st.file_uploader("Or upload an image to edit", type=["jpg","jpeg","png"],key=st.session_state.uploader_key)
     if up:
         bin = up.getbuffer()
         gen_fs.put(bin,
