@@ -352,7 +352,7 @@ with tabs[1]:
     st.header(f"Edit Image — {st.session_state.current_chat}")
 
     # allow uploading an external image to edit
-    up = st.file_uploader("Or upload an image to edit", type=["jpg","jpeg","png"],key=st.session_state.uploader_key)
+    up = st.file_uploader("Or upload an image to edit", type=["jpg","jpeg","png"])
     if up:
         bin = up.getbuffer()
         gen_fs.put(bin,
