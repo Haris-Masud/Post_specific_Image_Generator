@@ -281,18 +281,27 @@ with tabs[0]:
     # 2) Create new image
     st.subheader("2. Generate New Image")
     post_txt     = st.text_area("User Post", height=150)
-    custom_instr = st.text_area("Custom Instructions", height=100)
+    custom_instr = st.text_area("User Prompt", height=100)
 
     if st.button("Generate Image"):
         if not post_txt.strip():
             st.error("Enter a post first.")
         else:
             with st.spinner("Generating prompt..."):
-                prompt = generate_text_prompt(post_txt)
-                prompt += f" IMPORTANT: … {custom_instr}"
+                # prompt = generate_text_prompt(post_txt)
+                prompt = f"You are a graphic designer creating a marketing image for a LinkedIn post. Create an image based on the following instructions (Follow them closely and carefully as they have the !highest! priority):\n {custom_instr} \n. For reference, you are generating an accompanying image for following LinkedIn post: {post_txt}"
+                enforcement = (
+                """ Strictly prioritize the visual style of the provided reference images.
+                The brand's visual style should be followed as shown in the references to ensure consistency."""
+                )
+                prompt += enforcement
 
             # — re-fetch fresh GridOuts to get unread data —
             fresh_refs = list_ref_images(st.session_state.current_chat)
+
+            if not fresh_refs:
+                st.error("No reference images available.")
+                st.stop()
 
             # ▶ Dump each fresh GridFS ref image back to disk
             temp_paths = []
