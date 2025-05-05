@@ -363,7 +363,7 @@ with tabs[1]:
     # allow uploading an external image to edit
     up = st.file_uploader("Or upload an image to edit", type=["jpg","jpeg","png"])
     if up:
-        bin = up.getbuffer()
+        bin = up.read()
         gen_fs.put(bin,
                    filename=up.name,
                    metadata={"chat": st.session_state.current_chat})
