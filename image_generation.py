@@ -77,6 +77,10 @@ if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = f"uploader_{uuid.uuid4()}"
 
 
+if "edit_uploader_key" not in st.session_state:
+    st.session_state.edit_uploader_key = f"edit_uploader_{uuid.uuid4()}"
+
+
 # ─── Sidebar: Chat (Project) Management ───────────────────────────────────────
 with st.sidebar:
     st.header("📂 Projects")
@@ -145,6 +149,7 @@ with st.sidebar:
     if st.session_state.current_chat != st.session_state.last_chat:
         # project changed → reset uploader
         st.session_state.uploader_key = f"uploader_{uuid.uuid4()}"
+        st.session_state.edit_uploader_key = f"edit_uploader_{uuid.uuid4()}"
         st.session_state.last_chat = st.session_state.current_chat
 
 # ─── Helpers to fetch images from GridFS ───────────────────────────────────────
@@ -361,7 +366,7 @@ with tabs[1]:
     st.header(f"Edit Image — {st.session_state.current_chat}")
 
     # allow uploading an external image to edit
-    up = st.file_uploader("Or upload an image to edit", type=["jpg","jpeg","png"])
+    up = st.file_uploader("Or upload an image to edit", type=["jpg","jpeg","png"], key=st.session_state.edit_uploader_key)
     if up:
         bin = up.read()
         gen_fs.put(bin,
